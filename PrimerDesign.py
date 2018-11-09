@@ -2,9 +2,10 @@
 primer script
 """
 from Bio import SeqIO
-from Bio.SeqUtils import MeltingTemp as Mt, Seq
+from Bio.SeqUtils import Seq
 import random
 import time
+from Primer import Primer
 
 
 class Gene:
@@ -12,55 +13,45 @@ class Gene:
     Structure for all the info for each gene.
     """
 
-    def __init__(self, seq="", start=0, end=0, length=0) -> None:
+    def __init__(self, seq, start, end, length) -> None:
         """
         Initialize gene
         """
-        if seq and start and end and length:
-            self.start, self.end, self.length, self.seq = int(start), int(end), int(length), str(seq)
+        self.start = int(start)
+        self.end = int(end)
+        self.length = int(length)
+        self.seq = str(seq)
 
-
-def find_start(sequence) -> str:
-    """
-    Locates position of start codon, returns string of 30bp downstream from it.
-    If no start codon, returns "no ATG"
-    """
-    try:
-        start = sequence.index("ATG")
-        return sequence[start:start+30]
-    except ValueError:
-        print("no ATG")
-
-
-def find_end(sequence) -> str:
-    """
-    last 30 bp of coding sequence in reverse complement
-    """
-    r = sequence[::-1]
-    stop_codons = ["GAT", "AAT", "AGT"]
-    end = 1000000
-    for codon in stop_codons:
+    def find_start(self) -> str:
+        """
+        Locates position of start codon, returns string of 30bp downstream from it.
+        If no start codon, returns "no ATG"
+        """
         try:
-            stop = r.index(codon)
-            if stop < end:
-                end = stop
+            start = self.seq.index("ATG")
+            return self.seq[start:start+30]
         except ValueError:
-            end = -1
-    if end >= 0:
-        end += 3
-    else:
-        end = 0
-    return str(Seq(r[end:end+30]).complement())
+            print("no ATG")
 
-
-def get_tm(sequence) -> float:
-    """
-    Calculates the TM of the primer sequence.
-    """
-    myseq = Seq(sequence)
-    if len(myseq) == 0:
-        print("STRING IS EMPTY")
-    return float('%0.2f' % Mt.Tm_NN(myseq, nn_table=Mt.DNA_NN2))
+    def find_end(self) -> str:
+        """
+        last 30 bp of coding sequence in reverse complement
+        """
+        r = self.seq[::-1]
+        stop_codons = ["GAT", "AAT", "AGT"]
+        end = 1000000
+        for codon in stop_codons:
+            try:
+                stop = r.index(codon)
+                if stop < end:
+                    end = stop
+            except ValueError:
+                end = -1
+        if end >= 0:
+            end += 3
+        else:
+            end = 0
+        return str(Seq(r[end:end+30]).complement())
 
 
 def get_distance(gene1: Gene, gene2: Gene, position: dict) -> int:
@@ -149,41 +140,39 @@ def pool_placement(pool_size: int, tm_cutoff: int):
         geninfo[gene_table[i][4]] = Gene(str(fasta.seq), gene_table[i][1], gene_table[i][2], gene_table[i][5])
         good_primers[gene_table[i][4]] = []
         i += 1
-    # Make a dict to keep track of genome position
+    # Make a database to keep track of relative positions of all genes in the genome
     position = {}
     for i in range(len(gene_table) - 1):
         accession = gene_table[i][0]
-        next_accession = gene_table[i+1][0]
+        next_accession = gene_table[i + 1][0]
         curr_gene = gene_table[i][4]
-        next_gene = gene_table[i+1][4]
+        next_gene = gene_table[i + 1][4]
         if len(position) == 0:
             position[curr_gene] = int(gene_table[0][1])
         if accession != next_accession:
             position[next_gene] = position[curr_gene] + geninfo[curr_gene].end \
                                   - geninfo[curr_gene].start + \
-                                  int(gene_table[i+1][1])
+                                  int(gene_table[i + 1][1])
         else:
             position[next_gene] = position[curr_gene] \
-                                  + (int(int(gene_table[i+1][1]) - int(gene_table[i][2]))) \
+                                  + (int(int(gene_table[i + 1][1]) - int(gene_table[i][2]))) \
                                   + geninfo[curr_gene].end - geninfo[curr_gene].start
 
     # Algorithm for finding optimal fwd & rev primer based on TM#
     failed_genes = []
     for gene in geninfo:
-        fwdseq = find_start(geninfo[gene].seq)
-        revseq = find_end(geninfo[gene].seq)
-        if len(fwdseq) == 0 or len(revseq) == 0:
-            print("STRING EMPTY" + gene)
-        if get_tm(fwdseq) < tm_cutoff or get_tm(revseq) < tm_cutoff:
+        fwd = Primer(gene, "F", geninfo[gene].find_start())
+        rev = Primer(gene, "R", geninfo[gene].find_end())
+        if fwd.calc_tm() < tm_cutoff or rev.calc_tm() < tm_cutoff:
             good_primers.pop(gene)
             failed_genes.append(gene)
         else:
-            while len(fwdseq) > 18 and get_tm(fwdseq) > tm_cutoff:
-                fwdseq = fwdseq[:-1]
-            good_primers[gene].append(fwdseq)
-            while len(revseq) > 18 and get_tm(revseq) > tm_cutoff:
-                revseq = revseq[:-1]
-            good_primers[gene].append(revseq)
+            while len(fwd.seq) > 18 and fwd.calc_tm() > tm_cutoff:
+                fwd.seq = fwd.seq[:-1]
+            good_primers[gene].append(fwd)
+            while len(fwd.seq) > 18 and rev.calc_tm() > tm_cutoff:
+                rev.seq = rev.seq[:-1]
+            good_primers[gene].append(rev)
 
     # Brute force algorithm for placing primers into subpools #
     # 1. If a pool is empty, just add the primer
@@ -196,7 +185,7 @@ def pool_placement(pool_size: int, tm_cutoff: int):
     # 5. If this is the last pool and fails, add to failed genes list
     print(len(failed_genes))
     keys_list = list(good_primers.keys()).copy()
-    keys_list = keys_list[50:1050]
+    keys_list = keys_list[50:150]
     num_genes = len(keys_list)
     # Make big pool #
     num_pools = num_genes // pool_size + 1
