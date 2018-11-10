@@ -1,5 +1,5 @@
 """
-primer class
+Representation of a single primer.
 """
 from Bio.SeqUtils import MeltingTemp as Mt, Seq
 
@@ -28,4 +28,4 @@ class Primer:
         """
         str rep
         """
-        return "ID: {} \n Direction: {} \n Sequence: {}".format(self.gene_id, self.direction, self.seq)
+        return "ID: {},  Direction: {} \n Sequence: {}".format(self.gene_id, self.direction, self.seq)
