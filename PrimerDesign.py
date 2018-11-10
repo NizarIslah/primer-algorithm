@@ -12,7 +12,7 @@ from Gene import Gene
 
 def is_complementary(primer1: Union[Primer, str], primer2: Union[Primer, str]) -> bool:
     """
-    Check for complementarity of 12 bp or more.
+    Check for complementarity of 12 bp or more between 2 primers or sequences.
     """
     p1seq = str(Seq(primer1.seq)) if isinstance(primer1, Primer) else primer1
     p2seq = str(Seq(primer2.seq).reverse_complement()) if isinstance(primer2, Primer) else primer2
@@ -133,7 +133,7 @@ def pool_placement(pool_size: int, tm_cutoff: int):
     # 5. If this is the last pool and fails, add to failed genes list
     print(len(failed_genes))
     keys_list = list(good_primers.keys()).copy()
-    keys_list = keys_list[50:150]
+    # keys_list = keys_list[50:150]
     num_genes = len(keys_list)
     # Make big pool #
     num_pools = num_genes // pool_size + 1
