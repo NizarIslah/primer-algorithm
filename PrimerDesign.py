@@ -299,8 +299,7 @@ if __name__ == '__main__':
     # Create the final oligos for each set of primers, required for PCR.
     oligos = create_oligos(pool, kmer_list)
 
-    for oligonucleotide in oligos:
-        print(oligonucleotide)
+    print(len(oligos))
     print(time.time() - t0)
 
 # 21% of the primers ruled out with TM cutoff 55
