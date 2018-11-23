@@ -121,6 +121,7 @@ def pool_placement(pool_size: int, tm_cutoff: int):
                                   + geninfo[curr_gene].end - geninfo[curr_gene].start
 
     good_primers, failed_genes = filter_tm(good_primers, geninfo, tm_cutoff)
+
     # Algorithm for finding optimal fwd & rev primer based on TM#
     # Brute force algorithm for placing primers into subpools #
     # 1. If a pool is empty, just add the primer
@@ -131,16 +132,13 @@ def pool_placement(pool_size: int, tm_cutoff: int):
     # d) check complementarity (<= 8bp) against each primer in pool
     # 4. If ALL conditions satisfied, add primer to the pool, else skip pool
     # 5. If this is the last pool and fails, add to failed genes list
-    print(len(failed_genes))
+
     keys_list = list(good_primers.keys()).copy()
-    # keys_list = keys_list[50:150]
     num_genes = len(keys_list)
     # Make big pool #
     num_pools = num_genes // pool_size + 1
     super_pool = [{} for _ in range(num_pools)]
     while len(keys_list) != 0:
-        if len(keys_list) == 1:
-            print("lol")
         curr_gene = random.choice(keys_list)
         fwd = good_primers[curr_gene][0]
         rev = good_primers[curr_gene][1]
@@ -162,16 +160,12 @@ def pool_placement(pool_size: int, tm_cutoff: int):
                 if i == num_pools:
                     failed_genes.append(curr_gene)
                     keys_list.remove(curr_gene)
-    print(len(failed_genes))
-    # insert (in front) gateway f/r, universal f, subpool f.
-    # append Sap/Bsa, subpool r.
     return super_pool, good_primers
 
 
 def add_subpoolf(oligo, super_pool, kmers):
     """
-    # do we still include the universal subpool f for size 25 or 50
-    # do we want to have the same subpool
+    Insert the forward subpool specific sequence.
     """
     num = 1
     i = 0
@@ -190,7 +184,7 @@ def add_subpoolf(oligo, super_pool, kmers):
 
 def add_universalf(oligo, super_pool, kmers):
     """
-    stuff
+    Insert the universal forward sequence.
     """
     # randomly select a 20-mer
     kmer = random.choice(kmers)
@@ -206,7 +200,7 @@ def add_universalf(oligo, super_pool, kmers):
 
 def add_gateway(oligo):
     """
-    adds gateway seq
+    Insert the gateway sequence.
     """
     gatewayf = "ACAAGTTTGTACAAAAAAGCAGGCTCA"
     gatewayr = "ACCACTTTGTACAAGAAAGCTGGGTT"
@@ -220,7 +214,7 @@ def add_gateway(oligo):
 
 def add_restriction_sites(oligo):
     """
-    screen & append restriction site after the specific gene sequence
+    Screen & append restriction site after the specific gene sequence.
     """
     sap_seq = "GGTCGAAGAGC"
     bsa_seq = "ACTGAGAGACC"
@@ -228,7 +222,7 @@ def add_restriction_sites(oligo):
     bsa1 = ("GGTCTC", "GAGACC")
     if sap1[0] in oligo[0] or sap1[1] in oligo[0]:
         if bsa1[0] in oligo[0] or bsa1[1] in oligo[0]:
-            oligo[0].append("no RS")
+            oligo = "FAILED"
         else:
             oligo[0].append(bsa_seq)
     else:
@@ -236,7 +230,7 @@ def add_restriction_sites(oligo):
 
     if sap1[0] in oligo[1] or sap1[1] in oligo[1]:
         if bsa1[0] in oligo[1] or bsa1[1] in oligo[1]:
-            oligo[1].append("no RS")
+            oligo = "FAILED"
         else:
             oligo[1].append(bsa_seq)
     else:
@@ -246,7 +240,7 @@ def add_restriction_sites(oligo):
 
 def add_subpoolr(oligo, super_pool, kmers):
     """
-    screen & append subpool specific reverse from list of 20-mers to end
+    Screen & append subpool specific reverse from list of 20-mers to end.
     """
     kmer = ""
     for gene in super_pool:
@@ -281,6 +275,20 @@ def create_oligos(super_pool: list, rand_dna: list):
     return good_oligos
 
 
+def printOligo(oligos: dict, gene_id: str) -> None:
+    """
+    Prints the gene id and string representing the entire oligo sequence.
+    """
+    oligo_set = oligos[gene_id]
+    print(gene_id + "\t", end="")
+    for oligo in oligo_set:
+        for x in oligo:
+            if isinstance(x, str):
+                print(x, end="")
+            else:
+                print(x.seq, end="")
+        print("\t", end="")
+
 if __name__ == '__main__':
 
     # Start the timer
@@ -299,13 +307,8 @@ if __name__ == '__main__':
     # Create the final oligos for each set of primers, required for PCR.
     oligos = create_oligos(pool, kmer_list)
 
-    print(len(oligos))
-    print(time.time() - t0)
-
-# 21% of the primers ruled out with TM cutoff 55
-# an additional 6% have at least 8bp complementary w/something
-# program run time: 3:30 - 4:00 minutes
-# do all the pool sizes, and change the # of bp compl. and the TM
-# check each constraint independently
-# screen sap1 sites
-# 5' G C T C T T C 3' design universal sequence (TM >= 55, GC content, 200 pool size)
+    # Print all genes + oligos in tab-delimited format, output can be copied to a spreadsheet.
+    print("GENE ID" + "\t" + "Forward Oligo Sequence" + "\t" + "Reverse Oligo Sequence")
+    for gene_id in oligos:
+        printOligo(oligos, gene_id)
+        print("")
