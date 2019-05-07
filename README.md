@@ -9,4 +9,6 @@ For all primers that pass these steps, a gateway, universal, and subpool-specifi
 
 The final result is a pool of given number of subpools with equal size that contains oligos that are optimally designed to achieve high rates of success with PCR, and gene cloning.
 
-The main module called PrimerDesign.py can be run directly to output a table of all successful candidate genes in the genome along with their oligo sequences. Pool size and number of subpools can be adjusted, as well as reference genome file, TM cutoff, and restriction sites.
+The main module called PrimerDesign.py can be run directly to output an excel file of all successful candidate genes in the genome along with their oligo sequences. Pool size and number of subpools can be adjusted, as well as reference genome file, TM cutoff, and restriction sites.
+
+## Making changes
