@@ -33,13 +33,14 @@ class Gene:
     def find_end(self) -> str:
         """
         last 30 bp of coding sequence in reverse complement
+        TODO: This should instead search from the first ATG until a stop codon is reached.
         """
-        r = self.seq[::-1]
+        rev = self.seq[::-1]
         stop_codons = ["GAT", "AAT", "AGT"]
         end = 1000000
         for codon in stop_codons:
             try:
-                stop = r.index(codon)
+                stop = rev.index(codon)
                 if stop < end:
                     end = stop
             except ValueError:
@@ -48,7 +49,7 @@ class Gene:
             end += 3
         else:
             end = 0
-        return str(Seq(r[end:end+30]).complement())
+        return str(Seq(rev[end:end+30]).complement())
 
     def get_length_diff(self, gene) -> int:
         """

@@ -2,23 +2,24 @@
 Main primer design module.
 """
 import random
-import time
 from typing import Union
 from Bio import SeqIO
 from Bio.SeqUtils import Seq
 from Primer import Primer
 from Gene import Gene
+import matplotlib.pyplot as plt
+import csv
 
 
-def is_complementary(primer1: Union[Primer, str], primer2: Union[Primer, str]) -> bool:
+def is_complementary(primer1: Union[Primer, str], primer2: Union[Primer, str], bp=12) -> bool:
     """
-    Check for complementarity of 12 bp or more between 2 primers or sequences.
+    Check for complementarity of bp diff or more between 2 primers or sequences.
     """
     p1seq = str(Seq(primer1.seq)) if isinstance(primer1, Primer) else primer1
     p2seq = str(Seq(primer2.seq).reverse_complement()) if isinstance(primer2, Primer) else primer2
-    start1, end1 = 0, 12
+    start1, end1 = 0, bp
     while end1 <= len(p1seq):
-        start2, end2 = 0, 12
+        start2, end2 = 0, bp
         while end2 <= len(p2seq):
             if p1seq[start1:end1] == p2seq[start2:end2]:
                 return True
@@ -68,26 +69,13 @@ def filter_tm(good_primers: dict, geninfo: dict, tm_cutoff: int) -> (dict, list)
     return good_primers, failed_genes
 
 
-def pool_placement(pool_size: int, tm_cutoff: int):
+def load_genes(num=2660, seqfile="GCF_000250985.1_Nema_parisii_ERTm1_V3_rna.fna", protfile="ProteinTableTrim.txt"):
     """
-    running algorithm to place primers in subpools
+    Create gene dictionary
     """
-    # gene_seqs_file = input("Enter gene sequences filename: ")
-    # gene_table_file = input("Enter gene table file: ")
-    # pool_size = int(input("Enter number of subpools desired: "))
-    # Part 1 #
-    # For each gene in the list we have a dictionary of key (gene ID) and tuple
-    # containing gene start, end, length, first 30 bp, last 30 bp
-    # Part 2 #
-
-    # We check if any of the fwd or reverse primers from the gene dictionary
-    # have 8 bp complementary. If any, we ensure they cannot be in same subpool.
-    # Also we have to create the pool with 25 subs each containing 100 primers.
-    fasta_sequences = \
-        SeqIO.parse(open(file="GCF_000250985.1_Nema_parisii_ERTm1_V3_rna.fna"),
-                    'fasta')
-    geninfo, good_primers = {}, {}
-    prot_file = open(file="ProteinTableTrim.txt")
+    fasta_sequences = SeqIO.parse(open(file=seqfile), 'fasta')
+    geninfo, init_primers = {}, {}
+    prot_file = open(file=protfile)
     lines = prot_file.readlines()
     lines = lines[1:]
     gene_table = []
@@ -100,9 +88,9 @@ def pool_placement(pool_size: int, tm_cutoff: int):
         # start, end, length are columns from the protein table
         geninfo[gene_table[i][4]] = Gene(str(fasta.seq), gene_table[i][1], gene_table[i][2],
                                          gene_table[i][5], gene_table[i][4])
-        good_primers[gene_table[i][4]] = []
+        init_primers[gene_table[i][4]] = []
         i += 1
-    # Make a database to keep track of relative positions of all genes in the genome
+    # Make a dictionary to keep track of relative positions of all genes in the genome
     position = {}
     for i in range(len(gene_table) - 1):
         accession = gene_table[i][0]
@@ -119,23 +107,22 @@ def pool_placement(pool_size: int, tm_cutoff: int):
             position[next_gene] = position[curr_gene] \
                                   + (int(int(gene_table[i + 1][1]) - int(gene_table[i][2]))) \
                                   + geninfo[curr_gene].end - geninfo[curr_gene].start
+    subset_primers = {g: init_primers[g] for g in list(init_primers.keys())[:num]}
+    subset_geninfo = {g: geninfo[g] for g in list(geninfo.keys())[:num]}
+    return subset_primers, subset_geninfo, position
 
-    good_primers, failed_genes = filter_tm(good_primers, geninfo, tm_cutoff)
 
-    # Algorithm for finding optimal fwd & rev primer based on TM#
-    # Brute force algorithm for placing primers into subpools #
+def pool_placement(pool_size: int, tm_cutoff: int, init_primers, geninfo, position):
+    """ Place into pools. """
+    # Algorithm for finding optimal fwd & rev primer
     # 1. If a pool is empty, just add the primer
     # 2. If a pool already contains some primer(s):
-    # a) check occupancy (<100?) of pool
-    # b) check lengths (+/- 500?) against each primer in pool
-    # c) check distance (>= 10kb?) against each primer in pool
-    # d) check complementarity (<= 8bp) against each primer in pool
-    # 4. If ALL conditions satisfied, add primer to the pool, else skip pool
-    # 5. If this is the last pool and fails, add to failed genes list
-
+    # a) If ALL conditions satisfied, add primer to the pool, else skip pool
+    # b) If fails to meet conditions for all subpools, add to failed genes list
+    good_primers, failed_genes = filter_tm(init_primers, geninfo, tm_cutoff)
     keys_list = list(good_primers.keys()).copy()
     num_genes = len(keys_list)
-    # Make big pool #
+    # success = 0
     num_pools = num_genes // pool_size + 1
     super_pool = [{} for _ in range(num_pools)]
     while len(keys_list) != 0:
@@ -153,6 +140,7 @@ def pool_placement(pool_size: int, tm_cutoff: int):
                     (is_acceptable(curr_gene, curr_pool, good_primers, geninfo, position) and
                      len(curr_pool) < pool_size):
                 curr_pool[curr_gene] = (fwd, rev)
+                # success += 1
                 keys_list.remove(curr_gene)
                 break
             else:
@@ -160,7 +148,8 @@ def pool_placement(pool_size: int, tm_cutoff: int):
                 if i == num_pools:
                     failed_genes.append(curr_gene)
                     keys_list.remove(curr_gene)
-    return super_pool, good_primers
+    # success = success/num_genes*100
+    return super_pool
 
 
 def add_subpoolf(oligo, super_pool, kmers):
@@ -254,11 +243,20 @@ def add_subpoolr(oligo, super_pool, kmers):
     return oligo
 
 
-def create_oligos(super_pool: list, rand_dna: list):
+def list_from_file(filename):
+    """ Make list of sequences from the file"""
+    file = open(filename)
+    flines, kmer_list = file.readlines(), []
+    for x in range(1, len(flines), 2):
+        kmer_list.append(flines[x].strip().split("\t")[0])
+    return kmer_list
+
+
+def create_oligos(super_pool: list, rand_dna_file):
     """
     Create good_oligos by adding the subpool, universal etc.
     """
-
+    rand_dna = list_from_file(rand_dna_file)
     good_oligos = {}
     for subpool in super_pool:
         for gene in subpool:
@@ -271,44 +269,43 @@ def create_oligos(super_pool: list, rand_dna: list):
             good_oligos[gene] = add_subpoolf(good_oligos[gene], subpool, rand_dna.copy())
             good_oligos[gene] = add_restriction_sites(good_oligos[gene])
             good_oligos[gene] = add_subpoolr(good_oligos[gene], subpool, rand_dna.copy())
-    print("good_oligos done")
     return good_oligos
 
 
-def printOligo(oligos: dict, gene_id: str) -> None:
+def save_output(path, fmt, size, oligos):
+    """ Save results to output file """
+    out = path + str(size) + fmt
+    with open(out, "w") as f:
+        writer = csv.writer(f)
+        for gene_id in oligos:
+            result = get_oligo_seq(oligos, gene_id)
+            writer.writerow([gene_id, result])
+        f.close()
+
+
+def get_oligo_seq(oligonucs: dict, geneid: str) -> str:
     """
     Prints the gene id and string representing the entire oligo sequence.
     """
-    oligo_set = oligos[gene_id]
-    print(gene_id + "\t", end="")
+    oligo_set = oligonucs[geneid]
+    s = ''
     for oligo in oligo_set:
-        for x in oligo:
-            if isinstance(x, str):
-                print(x, end="")
+        for o in oligo:
+            if isinstance(o, str):
+                s += o
             else:
-                print(x.seq, end="")
-        print("\t", end="")
+                s += o.seq
+        s += "\t"
+    return s
 
-if __name__ == '__main__':
 
-    # Start the timer
-    t0 = time.time()
-
-    # Open the file of randomly generated 20 nucleotide DNA sequences needed for the oligos, convert to list
-    kmer_file = "DNA_20mers.txt"
-    f = open(kmer_file)
-    flines, kmer_list = f.readlines(), []
-    for x in range(1, len(flines), 2):
-        kmer_list.append(flines[x].strip().split("\t")[0])
-
-    # Run the pooling algorithm to place primers in pools based on specific restraints including size, distance, TM.
-    pool, primers = pool_placement(100, 50)
-
-    # Create the final oligos for each set of primers, required for PCR.
-    oligos = create_oligos(pool, kmer_list)
-
-    # Print all genes + oligos in tab-delimited format, output can be copied to a spreadsheet.
-    print("GENE ID" + "\t" + "Forward Oligo Sequence" + "\t" + "Reverse Oligo Sequence")
-    for gene_id in oligos:
-        printOligo(oligos, gene_id)
-        print("")
+def make_line_plot(data, title, x_axis, y_axis, path):
+    """ Makes a plot with the data."""
+    fig = plt.figure()
+    x, y = zip(*sorted(data.items(), key=lambda kv: kv[0]))
+    plt.plot(x, y)
+    fig.suptitle(title)
+    plt.xlabel(x_axis)
+    plt.ylabel(y_axis)
+    fig.savefig(path)
+    plt.show()
