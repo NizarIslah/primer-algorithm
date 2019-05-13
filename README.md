@@ -1,7 +1,7 @@
 # primer-algorithm
 
 ## Overview
-A primer design algorithm for Multiplex Polymerase Chain Reaction (PCR) and gene cloning. The algorithm works by first locating the first 30 base pairs downstream of the start codon for each gene in the reference genome (in this case Nematocida parisii). Any genes with such sequences below the optimal TM are filtered out. Otherwise, 1 bp is trimmed at a time from the end of the 30 bp sequence while the TM is above the optimal TM cutoff for PCR conditions. A similar process is done for the reverse strand. T
+A primer design algorithm for Multiplex Polymerase Chain Reaction (PCR) and gene cloning. The algorithm works by first locating the first 30 base pairs downstream of the start codon for each gene in the reference genome (in this case Nematocida parisii). Any genes with such sequences below the optimal TM are filtered out. Otherwise, 1 bp is trimmed at a time from the end of the 30 bp sequence while the TM is above the optimal TM cutoff for PCR conditions. A similar process is done for the reverse strand.
 
 At this stage, a pool placement function sorts primers into subpools based on constraints including gene size, location in the genome, complementarity with primers currently in the pool, and the current size of the pool. If the primer is rejected, the next subpool is checked.
 
